@@ -1,5 +1,6 @@
-import { getRequestConfig } from 'next-intl/server';
-import { routing } from './routing';
+import { getRequestConfig } from "next-intl/server";
+import { routing } from "./routing";
+import { cookies } from "next/headers";
 
 export default getRequestConfig(async ({ requestLocale }) => {
     let locale = await requestLocale;
@@ -9,15 +10,32 @@ export default getRequestConfig(async ({ requestLocale }) => {
         locale = routing.defaultLocale;
     }
 
-    // Fetch translations from API
-    const response = await fetch(`https://dev.cms.koworkerai.com/api/translations?where[route][equals]=/&where[lang][equals]=${locale}`);
-    let data = await response.json();
-    if (data) {
-        data = data.docs[0].translations
+    // ✅ Get the current pathname from cookies
+    let pathname = "/";
+    try {
+        const cookieStore = cookies();
+        pathname = (await cookieStore).get("currentPath")?.value || "/";
+    } catch (error) {
+        console.error("Error reading pathname cookie:", error);
     }
 
-    return {
-        locale,
-        messages: data
-    };
+    // ✅ Fetch translations dynamically based on locale & pathname
+    try {
+        const response = await fetch(
+            `https://dev.cms.koworkerai.com/api/translations?where[route][equals]=${pathname}&where[lang][equals]=${locale}`
+        );
+        console.log('path', pathname)
+        const data = await response.json();
+
+        return {
+            locale,
+            messages: data?.docs?.[0]?.translations || {},
+        };
+    } catch (error) {
+        console.error("Error fetching translations:", error);
+        return {
+            locale,
+            messages: {},
+        };
+    }
 });
